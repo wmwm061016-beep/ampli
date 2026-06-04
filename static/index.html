@@ -729,6 +729,10 @@ function dist(a, b) {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
 
+// ==========================================
+// MediaPipe 얼굴 분석 (로드 실패해도 앱 작동)
+// ==========================================
+try {
 const faceMesh = new FaceMesh({
   locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
 });
@@ -795,7 +799,7 @@ faceMesh.onResults((results) => {
     ctx.fill();
   });
 
-  faceState = `[표정: ${browAnalysis}, ${mouthAnalysis}] / [시선·고개: ${eyeAnalysis}, ${poseAnalysis}]`;
+  faceState = `[표정: ${browAnalysis}, ${mouthAnalysis}] / [시선/고개: ${eyeAnalysis}, ${poseAnalysis}]`;
 
   // UI 업데이트
   document.getElementById('faceOverlay').textContent = faceState;
@@ -814,8 +818,11 @@ const camera = new Camera(videoEl, {
   height: 480
 });
 camera.start().catch(e => {
-  document.getElementById('faceOverlay').textContent = "⚠ 카메라 권한이 필요합니다";
+  document.getElementById('faceOverlay').textContent = "[!] 카메라 권한이 필요합니다";
 });
+} catch(e) {
+  console.warn("MediaPipe 로드 실패:", e.message);
+}
 
 // ==========================================
 // 채팅 UI
@@ -869,7 +876,7 @@ async function sendText(text, voiceState = '[음성: 텍스트 입력]') {
   if (!text.trim() || isWaitingAI) return;
   isWaitingAI = true;
 
-  addMessage('user', text, voiceState !== '[음성: 텍스트 입력]' ? '🎙 음성 입력' : '');
+  addMessage('user', text, voiceState !== '[음성: 텍스트 입력]' ? '\u{1F399} 음성 입력' : '');
   showTyping();
   setInputDisabled(true);
 
@@ -890,7 +897,7 @@ async function sendText(text, voiceState = '[음성: 텍스트 입력]') {
   } catch (e) {
     const typing = document.getElementById('typingIndicator');
     if (typing) typing.remove();
-    addMessage('ai', `⚠ 오류: ${e.message}`);
+    addMessage('ai', `[오류] ${e.message}`);
   } finally {
     isWaitingAI = false;
     setInputDisabled(false);
@@ -957,7 +964,7 @@ function stopRecording() {
 }
 
 async function processAudio() {
-  // webm → wav 변환 없이 서버로 전송 (서버에서 soundfile이 처리)
+  // webm to wav 변환 없이 서버로 전송
   const blob = new Blob(audioChunks, { type: 'audio/webm' });
   const formData = new FormData();
   formData.append('file', blob, 'audio.webm');
@@ -970,10 +977,10 @@ async function processAudio() {
 
     await sendText(data.text, data.voice_state);
   } catch (e) {
-    addMessage('ai', `⚠ ${e.message}`);
+    addMessage('ai', `[오류] ${e.message}`);
   } finally {
     const btn = document.getElementById('voiceBtn');
-    btn.innerHTML = '🎙';
+    btn.innerHTML = '\u{1F399}';
     btn.disabled = false;
     document.getElementById('sendBtn').disabled = false;
     document.getElementById('voiceHint').textContent = 'Enter 키로도 전송할 수 있어요';
@@ -1082,14 +1089,12 @@ function renderSidebar() {
   sessions.forEach(s => {
     const div = document.createElement('div');
     div.className = 'sidebar-item' + (s.id === currentSessionId ? ' active' : '');
-    div.innerHTML = `
-      <div class="icon">💬</div>
-      <div class="label">${s.title}</div>
-      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
-        <div class="date">${formatDate(s.ts)}</div>
-        <div class="del-btn" data-id="${s.id}" title="삭제" style="font-size:10px;color:#9ca3af;cursor:pointer;">✕</div>
-      </div>
-    `;
+    div.innerHTML = '<div class="icon">💬</div>' +
+      '<div class="label">' + s.title + '</div>' +
+      '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">' +
+        '<div class="date">' + formatDate(s.ts) + '</div>' +
+        '<div class="del-btn" data-id="' + s.id + '" title="삭제" style="font-size:10px;color:#9ca3af;cursor:pointer;">x</div>' +
+      '</div>';
     // 대화 불러오기
     div.addEventListener('click', (e) => {
       if (e.target.classList.contains('del-btn')) return;
@@ -1195,14 +1200,12 @@ function renderSidebarMobile() {
   sessions.forEach(s => {
     const div = document.createElement('div');
     div.className = 'sidebar-item' + (s.id === currentSessionId ? ' active' : '');
-    div.innerHTML = \`
-      <div class="icon">💬</div>
-      <div class="label">\${s.title}</div>
-      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
-        <div class="date">\${formatDate(s.ts)}</div>
-        <div class="del-btn" data-id="\${s.id}" style="font-size:10px;color:#9ca3af;cursor:pointer;">✕</div>
-      </div>
-    \`;
+    div.innerHTML = '<div class="icon">💬</div>' +
+      '<div class="label">' + s.title + '</div>' +
+      '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">' +
+        '<div class="date">' + formatDate(s.ts) + '</div>' +
+        '<div class="del-btn" data-id="' + s.id + '" style="font-size:10px;color:#9ca3af;cursor:pointer;">x</div>' +
+      '</div>';
     div.addEventListener('click', (e) => {
       if (e.target.classList.contains('del-btn')) return;
       loadSession(s.id);
