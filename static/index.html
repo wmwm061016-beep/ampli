@@ -1,0 +1,1139 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ampli — Multimodal AI Counselor</title>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #ffffff;
+    --surface: #ffffff;
+    --surface2: #dde1e7;
+    --chat-bg: #f1f3f5;
+    --card-bg: #dde1e7;
+    --border: rgba(140,150,165,0.2);
+    --accent: #3b82f6;
+    --accent2: #60a5fa;
+    --text: #2d3748;
+    --text-dim: #64748b;
+    --red: #f87171;
+    --radius: 16px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Noto Sans KR', sans-serif;
+    font-weight: 300;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── 헤더 ── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 28px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+  }
+
+  .logo {
+    font-family: Helvetica, Arial, sans-serif;
+    font-weight: 700;
+    font-size: 22px;
+    letter-spacing: 0.02em;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .logo span { color: #64748b; font-style: normal; font-weight: 300; font-size: 13px; margin-left: 10px; }
+
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 8px rgba(59,130,246,0.4);
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .header-right { display: flex; align-items: center; gap: 12px; }
+
+  .turn-counter {
+    font-size: 12px;
+    color: #64748b;
+    background: #dde1e7;
+    padding: 4px 12px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+  }
+
+  /* ── 메인 레이아웃 ── */
+  main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    gap: 0;
+  }
+
+  /* ── 왼쪽: 카메라 패널 ── */
+  .camera-panel {
+    width: 420px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    padding: 20px;
+    gap: 16px;
+  }
+
+  .camera-wrap {
+    position: relative;
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: #000;
+    aspect-ratio: 4/3;
+  }
+
+  #videoEl {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transform: scaleX(-1);
+    display: block;
+  }
+
+  #canvasEl {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    transform: scaleX(-1);
+  }
+
+  .camera-overlay {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    background: linear-gradient(transparent, rgba(0,0,0,0.85));
+    padding: 16px;
+    font-size: 12px;
+    color: rgba(255,255,255,0.7);
+    line-height: 1.6;
+  }
+
+  .camera-badge {
+    position: absolute;
+    top: 12px; left: 12px;
+    background: rgba(59,130,246,0.15);
+    border: 1px solid rgba(59,130,246,0.3);
+    color: var(--accent);
+    font-size: 10px;
+    font-weight: 500;
+    padding: 3px 10px;
+    border-radius: 20px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  /* ── 분석 카드들 ── */
+  .analysis-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .analysis-card {
+    background: #dde1e7;
+    border: 1px solid rgba(140,150,165,0.3);
+    border-radius: 12px;
+    padding: 12px;
+  }
+
+  .analysis-card .label {
+    font-size: 10px;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 6px;
+  }
+
+  .analysis-card .value {
+    font-size: 12px;
+    color: var(--text);
+    line-height: 1.4;
+  }
+
+  .analysis-card .indicator {
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    margin-right: 5px;
+    background: var(--accent2);
+  }
+
+  /* ── 오른쪽: 채팅 패널 ── */
+  .chat-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── 채팅 메시지 영역 ── */
+  #chatBox {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    scroll-behavior: smooth;
+    background: #f1f3f5;
+  }
+
+  #chatBox::-webkit-scrollbar { width: 4px; }
+  #chatBox::-webkit-scrollbar-track { background: transparent; }
+  #chatBox::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .msg {
+    display: flex;
+    flex-direction: column;
+    max-width: 75%;
+    animation: fadeUp 0.3s ease forwards;
+    opacity: 0;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .msg.user { align-self: flex-end; align-items: flex-end; }
+  .msg.ai { align-self: flex-start; align-items: flex-start; }
+
+  .msg-sender {
+    font-size: 11px;
+    color: #64748b;
+    margin-bottom: 5px;
+    letter-spacing: 0.05em;
+  }
+
+  .msg.ai .msg-sender { color: var(--accent); }
+
+  .msg-bubble {
+    padding: 14px 18px;
+    border-radius: 18px;
+    font-size: 14px;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .msg.user .msg-bubble {
+    background: #dde1e7;
+    border: 1px solid rgba(140,150,165,0.3);
+    border-bottom-right-radius: 4px;
+    color: #2d3748;
+  }
+
+  .msg.ai .msg-bubble {
+    background: #dde1e7;
+    border: 1px solid rgba(140,150,165,0.3);
+    border-bottom-left-radius: 4px;
+    color: #2d3748;
+  }
+
+  .msg-meta {
+    font-size: 10px;
+    color: #64748b;
+    margin-top: 4px;
+    opacity: 0.7;
+  }
+
+  /* ── 타이핑 인디케이터 ── */
+  .typing {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 14px 18px;
+    background: linear-gradient(135deg, rgba(59,130,246,0.08), rgba(96,165,250,0.05));
+    border: 1px solid rgba(59,130,246,0.15);
+    border-radius: 18px;
+    border-bottom-left-radius: 4px;
+    width: fit-content;
+  }
+
+  .typing span {
+    width: 7px; height: 7px;
+    background: var(--accent);
+    border-radius: 50%;
+    animation: bounce 1.2s infinite;
+  }
+  .typing span:nth-child(2) { animation-delay: 0.2s; }
+  .typing span:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes bounce {
+    0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+    30% { transform: translateY(-6px); opacity: 1; }
+  }
+
+  /* ── 입력 영역 ── */
+  .input-area {
+    padding: 16px 28px 20px;
+    border-top: 1px solid var(--border);
+    background: #ffffff;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+
+  .input-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+
+  #textInput {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 18px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+    resize: none;
+    height: 46px;
+    line-height: 1.4;
+  }
+
+  #textInput:focus { border-color: rgba(59,130,246,0.4); }
+  #textInput::placeholder { color: #64748b; }
+
+  .btn {
+    height: 46px;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 18px;
+    white-space: nowrap;
+  }
+
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  #sendBtn {
+    background: var(--accent);
+    color: #fff;
+    min-width: 56px;
+    width: 56px;
+    padding: 0;
+    justify-content: center;
+  }
+  #sendBtn:hover:not(:disabled) { background: #2563eb; transform: translateY(-1px); }
+
+  #voiceBtn {
+    background: #ffffff;
+    color: #3b82f6;
+    border: 2px solid #3b82f6;
+    min-width: 56px;
+    width: 56px;
+    justify-content: center;
+    font-size: 18px;
+    padding: 0;
+  }
+  #voiceBtn:hover:not(:disabled) { background: #eff6ff; }
+  #voiceBtn.recording {
+    background: #eff6ff;
+    border-color: #34d399;
+    color: #34d399;
+    animation: recordPulse 1s infinite;
+  }
+
+  @keyframes recordPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(52,211,153,0.5); }
+    50% { box-shadow: 0 0 0 8px rgba(52,211,153,0); }
+  }
+
+  #resetBtn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: #64748b;
+    padding: 0 14px;
+  }
+  #resetBtn:hover:not(:disabled) { border-color: var(--red); color: var(--red); }
+
+  .voice-hint {
+    font-size: 11px;
+    color: #64748b;
+    text-align: center;
+    height: 14px;
+    transition: color 0.3s;
+  }
+
+  /* ── 음성 재생 표시 ── */
+  .playing-badge {
+    font-size: 11px;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .playing-badge::before {
+    content: '';
+    width: 5px; height: 5px;
+    background: var(--accent);
+    border-radius: 50%;
+    animation: pulse 1s infinite;
+  }
+
+  /* ── 사이드바 ── */
+  .sidebar {
+    width: 220px;
+    flex-shrink: 0;
+    background: #ffffff;
+    border-right: 1px solid rgba(140,150,165,0.2);
+    display: flex;
+    flex-direction: column;
+    padding: 16px 12px;
+    gap: 6px;
+    overflow-y: auto;
+  }
+
+  .sidebar-title {
+    font-size: 10px;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding: 8px 10px 6px;
+  }
+
+  .sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background 0.15s;
+    font-size: 13px;
+    color: var(--text);
+  }
+
+  .sidebar-item:hover { background: var(--surface2); }
+
+  .sidebar-item.active {
+    background: rgba(59,130,246,0.1);
+    color: var(--accent);
+    font-weight: 500;
+  }
+
+  .sidebar-item .icon {
+    width: 28px; height: 28px;
+    border-radius: 8px;
+    background: var(--surface2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    flex-shrink: 0;
+  }
+
+  .sidebar-item.active .icon {
+    background: rgba(59,130,246,0.15);
+  }
+
+  .sidebar-item .label {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sidebar-item .date {
+    font-size: 10px;
+    color: #64748b;
+  }
+
+  .sidebar-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 6px 0;
+  }
+
+  .sidebar-new-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px dashed var(--border);
+    cursor: pointer;
+    font-size: 13px;
+    color: #64748b;
+    background: transparent;
+    width: 100%;
+    transition: all 0.15s;
+    font-family: 'Noto Sans KR', sans-serif;
+  }
+
+  .sidebar-new-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(59,130,246,0.05);
+  }
+
+  /* ── 모바일 반응형 ── */
+  @media (max-width: 768px) {
+
+    /* 헤더 */
+    header {
+      padding: 12px 16px;
+    }
+
+    .logo img { height: 28px; }
+    .logo span { display: none; }
+
+    /* 사이드바 숨김 */
+    .sidebar { display: none; }
+
+    /* 메인 세로 레이아웃 */
+    main {
+      flex-direction: column;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+
+    /* 카메라 패널 가로 전체 */
+    .camera-panel {
+      width: 100%;
+      border-right: none;
+      border-bottom: 1px solid var(--border);
+      padding: 12px;
+      gap: 10px;
+    }
+
+    /* 카메라 비율 조정 */
+    .camera-wrap {
+      aspect-ratio: 16/9;
+    }
+
+    /* 분석 카드 4열 → 2열 유지하되 글씨 작게 */
+    .analysis-card {
+      padding: 8px;
+    }
+
+    .analysis-card .value {
+      font-size: 11px;
+    }
+
+    /* 채팅 패널 */
+    .chat-panel {
+      flex: 1;
+      min-height: 50vh;
+    }
+
+    /* 채팅 패딩 줄이기 */
+    #chatBox {
+      padding: 16px;
+      gap: 14px;
+    }
+
+    /* 말풍선 최대 너비 늘리기 */
+    .msg {
+      max-width: 90%;
+    }
+
+    .msg-bubble {
+      font-size: 13px;
+      padding: 12px 14px;
+    }
+
+    /* 입력 영역 */
+    .input-area {
+      padding: 10px 12px 14px;
+    }
+
+    .input-row {
+      gap: 6px;
+    }
+
+    #textInput {
+      font-size: 13px;
+      padding: 10px 14px;
+    }
+
+    .btn {
+      height: 42px;
+      padding: 0 12px;
+      font-size: 12px;
+    }
+
+    #voiceBtn {
+      min-width: 70px;
+    }
+
+    /* turn counter */
+    .turn-counter {
+      font-size: 11px;
+      padding: 3px 8px;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .analysis-grid {
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .camera-wrap {
+      aspect-ratio: 4/3;
+    }
+  }
+  .spin-circle {
+    display: inline-block;
+    width: 16px; height: 16px;
+    border: 2px solid #3b82f6;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <img src="/static/logo.png" alt="Ampli" style="height:36px; width:auto; object-fit:contain;">
+    <span style="font-family:Helvetica,Arial,sans-serif;font-weight:700;font-size:20px;color:#3b82f6;letter-spacing:0.01em;">Ampli</span>
+  </div>
+  <div class="header-right">
+    <span class="turn-counter" id="turnCounter">0 / 11 대화</span>
+    <div class="status-dot"></div>
+  </div>
+</header>
+
+<main>
+
+  <!-- ── 사이드바: 대화 목록 ── -->
+  <div class="sidebar">
+    <button class="sidebar-new-btn" id="newChatBtn">＋ 새 대화</button>
+    <div class="sidebar-title">대화 목록</div>
+    <div id="chatList"></div>
+  </div>
+
+  <!-- 카메라 백그라운드 실행 (화면에는 안 보임) -->
+  <div style="display:none;">
+    <video id="videoEl" autoplay playsinline muted></video>
+    <canvas id="canvasEl"></canvas>
+    <div id="faceOverlay"></div>
+    <div id="cardExpression"></div>
+    <div id="cardGaze"></div>
+    <div id="cardBrow"></div>
+    <div id="cardMouth"></div>
+  </div>
+
+  <!-- ── 오른쪽: 채팅 ── -->
+  <div class="chat-panel">
+    <div id="chatBox">
+      <div class="msg ai">
+        <div class="msg-sender">Ampli</div>
+        <div class="msg-bubble">안녕하세요. 오늘 어떤 생각을 가지고 오셨나요?</div>
+      </div>
+    </div>
+
+    <div class="input-area">
+      <div class="input-row">
+        <textarea id="textInput" placeholder="생각을 입력하거나 음성 버튼을 누르세요..." rows="1"></textarea>
+        <button class="btn" id="voiceBtn">🎙</button>
+        <button class="btn" id="sendBtn">전송 ↵</button>
+      </div>
+      <div class="voice-hint" id="voiceHint">Enter 키로도 전송할 수 있어요</div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+// ==========================================
+// 전역 상태
+// ==========================================
+let faceState = "";
+let isRecording = false;
+let mediaRecorder = null;
+let audioChunks = [];
+let turnCount = 0;
+let isWaitingAI = false;
+let currentAudio = null;
+
+// ==========================================
+// MediaPipe 얼굴 분석
+// ==========================================
+const videoEl = document.getElementById('videoEl');
+const canvasEl = document.getElementById('canvasEl');
+const ctx = canvasEl.getContext('2d');
+
+function dist(a, b) {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+const faceMesh = new FaceMesh({
+  locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
+});
+
+faceMesh.setOptions({
+  maxNumFaces: 1,
+  refineLandmarks: true,
+  minDetectionConfidence: 0.5,
+  minTrackingConfidence: 0.5
+});
+
+faceMesh.onResults((results) => {
+  canvasEl.width = videoEl.videoWidth;
+  canvasEl.height = videoEl.videoHeight;
+  ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+
+  if (!results.multiFaceLandmarks || results.multiFaceLandmarks.length === 0) {
+    faceState = "";
+    document.getElementById('faceOverlay').textContent = "얼굴을 화면에 맞춰주세요";
+    return;
+  }
+
+  const lm = results.multiFaceLandmarks[0];
+
+  // EAR (눈 개폐)
+  const hDist = dist(lm[33], lm[133]);
+  const vDist = dist(lm[159], lm[145]);
+  const ear = hDist !== 0 ? vDist / hDist : 0;
+  const eyeAnalysis = ear < 0.21 ? "눈을 감았거나 찡그림" : "안정적으로 화면 응시";
+
+  // 고개 방향
+  const nose = lm[1];
+  const leftCheek = lm[234];
+  const rightCheek = lm[454];
+  const lDist = dist(nose, leftCheek);
+  const rDist = dist(nose, rightCheek);
+  let poseAnalysis = "정면 마주함";
+  if (lDist > rDist * 1.4) poseAnalysis = "고개를 오른쪽으로 돌림";
+  else if (rDist > lDist * 1.4) poseAnalysis = "고개를 왼쪽으로 돌림";
+
+  // 미간 찌푸림
+  const browDist = dist(lm[107], lm[336]);
+  const faceWidth = dist(lm[234], lm[454]);
+  const browRatio = faceWidth !== 0 ? browDist / faceWidth : 1;
+  const browAnalysis = browRatio < 0.18 ? "미간을 깊게 찌푸림 (인지적 과부하)" : "편안한 이마";
+
+  // 입 (MAR + 스마일)
+  const mouthW = dist(lm[61], lm[291]);
+  const mouthH = dist(lm[13], lm[14]);
+  const mar = mouthW !== 0 ? mouthH / mouthW : 0;
+  const mouthCenterY = (lm[13].y + lm[14].y) / 2;
+  const cornersY = (lm[61].y + lm[291].y) / 2;
+  const smileScore = mouthCenterY - cornersY;
+  let mouthAnalysis = "자연스럽게 다문 입술";
+  if (mar > 0.15) mouthAnalysis = "입을 약간 벌림 (몰입 및 신선한 충격)";
+  else if (smileScore > 0.015) mouthAnalysis = "입꼬리가 올라간 미소 (긍정적 흥미)";
+  else if (smileScore < -0.008) mouthAnalysis = "입술을 굳게 다물거나 처짐 (방어 및 신중함)";
+
+  // 특징점 시각화
+  [[lm[107], lm[336]], [lm[159], lm[145]]].flat().forEach(p => {
+    ctx.beginPath();
+    ctx.arc(p.x * canvasEl.width, p.y * canvasEl.height, 2, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(59,130,246,0.8)';
+    ctx.fill();
+  });
+
+  faceState = `[표정: ${browAnalysis}, ${mouthAnalysis}] / [시선·고개: ${eyeAnalysis}, ${poseAnalysis}]`;
+
+  // UI 업데이트
+  document.getElementById('faceOverlay').textContent = faceState;
+  document.getElementById('cardExpression').innerHTML = `<span class="indicator"></span>${mouthAnalysis}`;
+  document.getElementById('cardGaze').innerHTML = `<span class="indicator"></span>${eyeAnalysis}`;
+  document.getElementById('cardBrow').innerHTML = `<span class="indicator"></span>${browAnalysis}`;
+  document.getElementById('cardMouth').innerHTML = `<span class="indicator"></span>${poseAnalysis}`;
+});
+
+// 카메라 시작
+const camera = new Camera(videoEl, {
+  onFrame: async () => {
+    await faceMesh.send({ image: videoEl });
+  },
+  width: 640,
+  height: 480
+});
+camera.start().catch(e => {
+  document.getElementById('faceOverlay').textContent = "⚠ 카메라 권한이 필요합니다";
+});
+
+// ==========================================
+// 채팅 UI
+// ==========================================
+function addMessage(role, text, meta = '') {
+  const chatBox = document.getElementById('chatBox');
+
+  // 타이핑 인디케이터 제거
+  const typing = document.getElementById('typingIndicator');
+  if (typing) typing.remove();
+
+  const div = document.createElement('div');
+  div.className = `msg ${role}`;
+  div.innerHTML = `
+    <div class="msg-sender">${role === 'user' ? '나' : '<img src="/static/logo.png" style="height:18px;vertical-align:middle;">'}</div>
+    <div class="msg-bubble">${text}</div>
+    ${meta ? `<div class="msg-meta">${meta}</div>` : ''}
+  `;
+  chatBox.appendChild(div);
+  chatBox.scrollTop = chatBox.scrollHeight;
+
+  // localStorage 저장
+  if (role === 'user' || role === 'ai') {
+    sessionMessages.push({ role, text, ts: Date.now() });
+    saveCurrentSession();
+  }
+}
+
+function showTyping() {
+  const chatBox = document.getElementById('chatBox');
+  const div = document.createElement('div');
+  div.className = 'msg ai';
+  div.id = 'typingIndicator';
+  div.innerHTML = `
+    <div class="msg-sender"><img src="/static/logo.png" style="height:18px;vertical-align:middle;"></div>
+    <div class="typing"><span></span><span></span><span></span></div>
+  `;
+  chatBox.appendChild(div);
+  chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+function updateTurnCounter(n) {
+  turnCount = n;
+  document.getElementById('turnCounter').textContent = `${n} / 11 대화`;
+}
+
+// ==========================================
+// 텍스트 전송
+// ==========================================
+async function sendText(text, voiceState = '[음성: 텍스트 입력]') {
+  if (!text.trim() || isWaitingAI) return;
+  isWaitingAI = true;
+
+  addMessage('user', text, voiceState !== '[음성: 텍스트 입력]' ? '🎙 음성 입력' : '');
+  showTyping();
+  setInputDisabled(true);
+
+  try {
+    const res = await fetch('/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, face_state: faceState, voice_state: voiceState })
+    });
+    const data = await res.json();
+
+    if (!res.ok) throw new Error(data.detail || '서버 오류');
+
+    addMessage('ai', data.reply);
+    updateTurnCounter(data.turn);
+    playTTS(data.reply);
+
+  } catch (e) {
+    const typing = document.getElementById('typingIndicator');
+    if (typing) typing.remove();
+    addMessage('ai', `⚠ 오류: ${e.message}`);
+  } finally {
+    isWaitingAI = false;
+    setInputDisabled(false);
+    document.getElementById('textInput').focus();
+  }
+}
+
+// ==========================================
+// TTS 재생 (브라우저 내장 음성)
+// ==========================================
+function playTTS(text) {
+  try {
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'ko-KR';
+    utterance.rate = 1.0;
+
+    const hint = document.getElementById('voiceHint');
+    hint.innerHTML = '<span class="playing-badge">Ampli 음성 재생 중</span>';
+    utterance.onend = () => {
+      hint.textContent = 'Enter 키로도 전송할 수 있어요';
+    };
+    window.speechSynthesis.speak(utterance);
+  } catch (e) {
+    console.warn('TTS 실패:', e);
+  }
+}
+
+// ==========================================
+// 음성 녹음 (Web Audio API)
+// ==========================================
+async function startRecording() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioChunks = [];
+    mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+    mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+    mediaRecorder.onstop = processAudio;
+    mediaRecorder.start();
+    isRecording = true;
+
+    const btn = document.getElementById('voiceBtn');
+    btn.innerHTML = '<span style="display:inline-block;width:14px;height:14px;background:#22c55e;border-radius:2px;"></span>';
+    btn.classList.add('recording');
+    document.getElementById('voiceHint').textContent = '말씀 중... 다 하셨으면 버튼을 누르세요';
+    document.getElementById('sendBtn').disabled = true;
+
+  } catch (e) {
+    alert('마이크 권한이 필요합니다.');
+  }
+}
+
+function stopRecording() {
+  if (!mediaRecorder) return;
+  mediaRecorder.stop();
+  mediaRecorder.stream.getTracks().forEach(t => t.stop());
+  isRecording = false;
+
+  const btn = document.getElementById('voiceBtn');
+  btn.innerHTML = '<span class="spin-circle"></span>';
+  btn.classList.remove('recording');
+  btn.disabled = true;
+  document.getElementById('voiceHint').textContent = '분석 중...';
+}
+
+async function processAudio() {
+  // webm → wav 변환 없이 서버로 전송 (서버에서 soundfile이 처리)
+  const blob = new Blob(audioChunks, { type: 'audio/webm' });
+  const formData = new FormData();
+  formData.append('file', blob, 'audio.webm');
+
+  try {
+    const res = await fetch('/audio', { method: 'POST', body: formData });
+    const data = await res.json();
+
+    if (!res.ok) throw new Error(data.detail || '음성 인식 실패');
+
+    await sendText(data.text, data.voice_state);
+  } catch (e) {
+    addMessage('ai', `⚠ ${e.message}`);
+  } finally {
+    const btn = document.getElementById('voiceBtn');
+    btn.innerHTML = '🎙';
+    btn.disabled = false;
+    document.getElementById('sendBtn').disabled = false;
+    document.getElementById('voiceHint').textContent = 'Enter 키로도 전송할 수 있어요';
+  }
+}
+
+// ==========================================
+// UI 헬퍼
+// ==========================================
+function setInputDisabled(val) {
+  document.getElementById('textInput').disabled = val;
+  document.getElementById('sendBtn').disabled = val;
+  document.getElementById('voiceBtn').disabled = val;
+
+}
+
+// ==========================================
+// 이벤트 바인딩
+// ==========================================
+document.getElementById('sendBtn').addEventListener('click', () => {
+  const text = document.getElementById('textInput').value.trim();
+  if (text) {
+    document.getElementById('textInput').value = '';
+    sendText(text);
+  }
+});
+
+document.getElementById('textInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    const text = e.target.value.trim();
+    if (text) {
+      e.target.value = '';
+      sendText(text);
+    }
+  }
+});
+
+document.getElementById('voiceBtn').addEventListener('click', () => {
+  if (!isRecording) startRecording();
+  else stopRecording();
+});
+
+// ==========================================
+// localStorage 대화 저장/불러오기
+// ==========================================
+
+let currentSessionId = null;
+let sessionMessages = []; // 현재 대화 메시지 저장용
+
+// 날짜 포맷
+function formatDate(ts) {
+  const now = Date.now();
+  const diff = now - ts;
+  if (diff < 60000) return '방금';
+  if (diff < 3600000) return Math.floor(diff/60000) + '분 전';
+  if (diff < 86400000) return Math.floor(diff/3600000) + '시간 전';
+  if (diff < 604800000) return Math.floor(diff/86400000) + '일 전';
+  return new Date(ts).toLocaleDateString('ko-KR');
+}
+
+// 모든 세션 불러오기
+function getSessions() {
+  try { return JSON.parse(localStorage.getItem('ampli_sessions') || '[]'); }
+  catch { return []; }
+}
+
+// 세션 저장
+function saveSessions(sessions) {
+  localStorage.setItem('ampli_sessions', JSON.stringify(sessions));
+}
+
+// 현재 대화 저장
+function saveCurrentSession() {
+  if (sessionMessages.length === 0) return;
+  const sessions = getSessions();
+  const firstMsg = sessionMessages.find(m => m.role === 'user');
+  const title = firstMsg ? firstMsg.text.slice(0, 20) + (firstMsg.text.length > 20 ? '...' : '') : '새 대화';
+
+  const idx = sessions.findIndex(s => s.id === currentSessionId);
+  const sessionData = {
+    id: currentSessionId,
+    title,
+    ts: Date.now(),
+    messages: sessionMessages
+  };
+
+  if (idx >= 0) sessions[idx] = sessionData;
+  else sessions.unshift(sessionData);
+
+  saveSessions(sessions);
+  renderSidebar();
+}
+
+// 사이드바 렌더링
+function renderSidebar() {
+  const sessions = getSessions();
+  const list = document.getElementById('chatList');
+  list.innerHTML = '';
+
+  if (sessions.length === 0) {
+    list.innerHTML = '<div style="font-size:12px;color:#9ca3af;padding:10px 12px;">저장된 대화가 없어요</div>';
+    return;
+  }
+
+  sessions.forEach(s => {
+    const div = document.createElement('div');
+    div.className = 'sidebar-item' + (s.id === currentSessionId ? ' active' : '');
+    div.innerHTML = `
+      <div class="icon">💬</div>
+      <div class="label">${s.title}</div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
+        <div class="date">${formatDate(s.ts)}</div>
+        <div class="del-btn" data-id="${s.id}" title="삭제" style="font-size:10px;color:#9ca3af;cursor:pointer;">✕</div>
+      </div>
+    `;
+    // 대화 불러오기
+    div.addEventListener('click', (e) => {
+      if (e.target.classList.contains('del-btn')) return;
+      loadSession(s.id);
+    });
+    // 삭제
+    div.querySelector('.del-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteSession(s.id);
+    });
+    list.appendChild(div);
+  });
+}
+
+// 대화 불러오기
+function loadSession(id) {
+  const sessions = getSessions();
+  const s = sessions.find(s => s.id === id);
+  if (!s) return;
+
+  currentSessionId = id;
+  sessionMessages = s.messages;
+
+  const chatBox = document.getElementById('chatBox');
+  chatBox.innerHTML = '';
+  s.messages.forEach(m => {
+    const div = document.createElement('div');
+    div.className = `msg ${m.role}`;
+    div.innerHTML = `
+      <div class="msg-sender">${m.role === 'user' ? '나' : '<img src="/static/logo.png" style="height:18px;vertical-align:middle;">'}</div>
+      <div class="msg-bubble">${m.text}</div>
+    `;
+    chatBox.appendChild(div);
+  });
+  chatBox.scrollTop = chatBox.scrollHeight;
+  renderSidebar();
+}
+
+// 대화 삭제
+function deleteSession(id) {
+  let sessions = getSessions();
+  sessions = sessions.filter(s => s.id !== id);
+  saveSessions(sessions);
+  if (currentSessionId === id) startNewChat();
+  else renderSidebar();
+}
+
+// 새 대화 시작
+function startNewChat() {
+  currentSessionId = 'session_' + Date.now();
+  sessionMessages = [];
+  const chatBox = document.getElementById('chatBox');
+  chatBox.innerHTML = `
+    <div class="msg ai">
+      <div class="msg-sender"><img src="/static/logo.png" style="height:18px;vertical-align:middle;"></div>
+      <div class="msg-bubble">안녕하세요. 오늘 어떤 생각을 가지고 오셨나요?</div>
+    </div>
+  `;
+  updateTurnCounter(0);
+  renderSidebar();
+}
+
+// 새 대화 버튼
+document.getElementById('newChatBtn').addEventListener('click', startNewChat);
+
+// 초기화
+startNewChat();
+renderSidebar();
+</script>
+</body>
+</html>
