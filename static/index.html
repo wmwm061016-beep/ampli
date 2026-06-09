@@ -642,7 +642,7 @@
       <span></span><span></span><span></span>
     </button>
     <div class="logo">
-      <img src="/static/logo2.png" alt="Ampli" style="height:36px; width:auto; object-fit:contain;">
+      <img src="/static/logo3.png" alt="Ampli" style="height:36px; width:auto; object-fit:contain;">
       <span style="font-family:Helvetica,Arial,sans-serif;font-weight:700;font-size:20px;color:#A5579E;letter-spacing:0.01em;">Ampli</span>
     </div>
   </div>
@@ -837,7 +837,7 @@ function addMessage(role, text, meta = '') {
   const div = document.createElement('div');
   div.className = `msg ${role}`;
   div.innerHTML = `
-    <div class="msg-sender">${role === 'user' ? '나' : '<img src="/static/logo2.png" style="height:18px;vertical-align:middle;">'}</div>
+    <div class="msg-sender">${role === 'user' ? '나' : '<img src="/static/logo3.png" style="height:18px;vertical-align:middle;">'}</div>
     <div class="msg-bubble">${text}</div>
     ${meta ? `<div class="msg-meta">${meta}</div>` : ''}
   `;
@@ -857,7 +857,7 @@ function showTyping() {
   div.className = 'msg ai';
   div.id = 'typingIndicator';
   div.innerHTML = `
-    <div class="msg-sender"><img src="/static/logo2.png" style="height:18px;vertical-align:middle;"></div>
+    <div class="msg-sender"><img src="/static/logo3.png" style="height:18px;vertical-align:middle;"></div>
     <div class="typing"><span></span><span></span><span></span></div>
   `;
   chatBox.appendChild(div);
@@ -1124,7 +1124,7 @@ function loadSession(id) {
     const div = document.createElement('div');
     div.className = `msg ${m.role}`;
     div.innerHTML = `
-      <div class="msg-sender">${m.role === 'user' ? '나' : '<img src="/static/logo2.png" style="height:18px;vertical-align:middle;">'}</div>
+      <div class="msg-sender">${m.role === 'user' ? '나' : '<img src="/static/logo3.png" style="height:18px;vertical-align:middle;">'}</div>
       <div class="msg-bubble">${m.text}</div>
     `;
     chatBox.appendChild(div);
@@ -1149,7 +1149,7 @@ function startNewChat() {
   const chatBox = document.getElementById('chatBox');
   chatBox.innerHTML = `
     <div class="msg ai">
-      <div class="msg-sender"><img src="/static/logo2.png" style="height:18px;vertical-align:middle;"></div>
+      <div class="msg-sender"><img src="/static/logo3.png" style="height:18px;vertical-align:middle;"></div>
       <div class="msg-bubble">안녕하세요. 오늘 어떤 생각을 가지고 오셨나요?</div>
     </div>
   `;
